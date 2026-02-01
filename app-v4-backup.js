@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getDatabase, ref, onValue, update, set } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+import { getDatabase, ref, onValue, update } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
 // Firebase config
 const firebaseConfig = {
@@ -15,7 +15,7 @@ const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 
 // Simple router
-let currentPage = 'responses';
+let currentPage = 'profiles';
 
 function navigate(page) {
     currentPage = page;
@@ -49,22 +49,6 @@ function copyToClipboard(text) {
     });
 }
 
-// Mark response as handled
-async function markResponseHandled(email) {
-    const responsesRef = ref(database, 'rumacfit/emailResponses');
-    const snapshot = await onValue(responsesRef, (snap) => {
-        const responses = snap.val() || {};
-        const updated = Object.keys(responses).reduce((acc, key) => {
-            if (responses[key].email !== email) {
-                acc[key] = responses[key];
-            }
-            return acc;
-        }, {});
-        set(responsesRef, updated);
-    }, { onlyOnce: true });
-    alert('✅ Marked as handled!');
-}
-
 // Mark as sent
 async function markAsSent(draftId, leadId) {
     await update(ref(database, `rumacfit/drafts/${draftId}`), {
@@ -92,10 +76,10 @@ function Navigation() {
             <div class="max-w-7xl mx-auto flex justify-between items-center flex-wrap gap-4">
                 <h1 class="text-2xl font-bold">🎯 Rumac Fit Sales Dashboard</h1>
                 <div class="flex gap-2 flex-wrap">
-                    <button onclick="navigate('responses')" class="px-4 py-2 rounded ${isActive('responses')}">📧 Responses</button>
-                    <button onclick="navigate('drafts')" class="px-4 py-2 rounded ${isActive('drafts')}">📝 Drafts</button>
                     <button onclick="navigate('profiles')" class="px-4 py-2 rounded ${isActive('profiles')}">👥 Profiles</button>
+                    <button onclick="navigate('drafts')" class="px-4 py-2 rounded ${isActive('drafts')}">📝 Drafts</button>
                     <button onclick="navigate('pipeline')" class="px-4 py-2 rounded ${isActive('pipeline')}">📊 Pipeline</button>
+                    <button onclick="navigate('tasks')" class="px-4 py-2 rounded ${isActive('tasks')}">✅ Tasks</button>
                     <button onclick="navigate('metrics')" class="px-4 py-2 rounded ${isActive('metrics')}">📈 Metrics</button>
                 </div>
             </div>
@@ -103,67 +87,7 @@ function Navigation() {
     `;
 }
 
-// Email Responses Page - NEW!
-function EmailResponses(responses) {
-    const pending = responses.filter(r => !r.handled).sort((a, b) => b.timestamp - a.timestamp);
-    
-    return `
-        <div>
-            <div class="bg-white rounded-lg shadow p-6 mb-6">
-                <div class="flex justify-between items-center flex-wrap gap-4">
-                    <h2 class="text-2xl font-bold text-gray-800">
-                        📧 Email Responses
-                        <span class="ml-4 text-sm font-normal text-gray-500">${pending.length} awaiting reply</span>
-                    </h2>
-                </div>
-            </div>
-
-            ${pending.length === 0 ? `
-                <div class="bg-white rounded-lg shadow p-12 text-center">
-                    <p class="text-gray-500 text-lg">✅ All caught up! No responses waiting.</p>
-                </div>
-            ` : pending.map(response => `
-                <div class="bg-white rounded-lg shadow p-6 mb-4">
-                    <div class="flex justify-between items-start mb-4 flex-wrap gap-4">
-                        <div class="flex-1 min-w-[250px]">
-                            <h3 class="text-xl font-bold text-gray-900">${response.name}</h3>
-                            <p class="text-sm text-gray-600 mt-1">${response.email}</p>
-                            <p class="text-xs text-gray-400 mt-2">${timeSince(response.timestamp)}</p>
-                        </div>
-                        <div class="flex gap-2 flex-wrap">
-                            <button onclick="copyToClipboard(\`${response.email}\`)" 
-                                class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-all">
-                                📋 Copy Email
-                            </button>
-                            <button onclick="markResponseHandled('${response.email}')" 
-                                class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-all">
-                                ✅ Mark Handled
-                            </button>
-                        </div>
-                    </div>
-                    <details class="border-t pt-4" open>
-                        <summary class="cursor-pointer text-blue-600 hover:text-blue-800 font-medium mb-2">Their Message</summary>
-                        <div class="mt-4 bg-gray-50 p-4 rounded">
-                            <pre class="whitespace-pre-wrap font-sans text-gray-800 text-sm">${response.message || 'No message content'}</pre>
-                        </div>
-                    </details>
-                    ${response.assessment_data ? `
-                        <details class="border-t pt-4 mt-4">
-                            <summary class="cursor-pointer text-blue-600 hover:text-blue-800 font-medium mb-2">Assessment Data</summary>
-                            <div class="mt-4 bg-blue-50 p-4 rounded text-sm">
-                                ${Object.entries(response.assessment_data).map(([key, value]) => `
-                                    <div class="mb-2"><strong>${key}:</strong> ${value}</div>
-                                `).join('')}
-                            </div>
-                        </details>
-                    ` : ''}
-                </div>
-            `).join('')}
-        </div>
-    `;
-}
-
-// Client Profiles Page
+// Client Profiles Page - NEW!
 function ClientProfiles(leads, drafts) {
     const enrichedLeads = leads.map(lead => {
         const leadDrafts = drafts.filter(d => d.leadId === lead.id);
@@ -363,6 +287,7 @@ function DraftQueue(drafts, leads, lastUpdated) {
 
 // Pipeline Page
 function Pipeline(leads) {
+    // Updated stages to match new sales cycle
     const stages = [
         { key: 'workshop_delivered', label: 'Workshop Delivered', color: 'bg-purple-500' },
         { key: 'assessment_complete', label: 'Assessment Complete', color: 'bg-blue-500' },
@@ -432,6 +357,83 @@ function Pipeline(leads) {
     `;
 }
 
+// Tasks Page
+function Tasks(leads, drafts) {
+    const now = Date.now();
+    const DAY = 86400000;
+    
+    const tasks = [];
+    
+    // Hot leads (replied but no follow-up)
+    leads.filter(l => l.stage === 'replied' && (!l.lastContact || (now - l.lastContact) > DAY)).forEach(lead => {
+        tasks.push({
+            priority: 1,
+            type: '🔥 HOT LEAD',
+            lead: lead.name,
+            action: 'Respond to their reply',
+            urgency: timeSince(lead.lastResponse || lead.lastUpdated)
+        });
+    });
+    
+    // Pending drafts
+    drafts.filter(d => d.status === 'pending').forEach(draft => {
+        tasks.push({
+            priority: 2,
+            type: '📝 Draft Ready',
+            lead: draft.leadName,
+            action: 'Send Email 2',
+            urgency: timeSince(draft.createdAt)
+        });
+    });
+    
+    // 48h follow-ups
+    leads.filter(l => l.stage === 'email2_sent' && l.lastContact && (now - l.lastContact) > (2 * DAY)).forEach(lead => {
+        tasks.push({
+            priority: 3,
+            type: '⏰ Follow-up Due',
+            lead: lead.name,
+            action: 'Send Email 3 (case study)',
+            urgency: timeSince(lead.lastContact)
+        });
+    });
+    
+    tasks.sort((a, b) => a.priority - b.priority);
+    
+    return `
+        <div>
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">
+                    ✅ Today's Tasks
+                    <span class="ml-4 text-sm font-normal text-gray-500">${tasks.length} items</span>
+                </h2>
+            </div>
+
+            ${tasks.length === 0 ? `
+                <div class="bg-white rounded-lg shadow p-12 text-center">
+                    <p class="text-gray-500 text-lg">🎉 All caught up! No urgent tasks.</p>
+                </div>
+            ` : `
+                <div class="space-y-3">
+                    ${tasks.map(task => `
+                        <div class="bg-white rounded-lg shadow p-4">
+                            <div class="flex justify-between items-center flex-wrap gap-4">
+                                <div class="flex-1">
+                                    <span class="font-bold ${task.priority === 1 ? 'text-red-600' : task.priority === 2 ? 'text-blue-600' : 'text-yellow-600'}">${task.type}</span>
+                                    <p class="text-gray-900 font-medium mt-1">${task.lead}</p>
+                                    <p class="text-gray-600 text-sm">${task.action}</p>
+                                </div>
+                                <div class="text-sm text-gray-500 text-right">
+                                    ${task.urgency}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `}
+        </div>
+    `;
+}
+
 // Metrics Page
 function Metrics(leads) {
     const now = Date.now();
@@ -486,22 +488,16 @@ function Metrics(leads) {
 function render() {
     const leadsRef = ref(database, 'rumacfit/leads');
     const draftsRef = ref(database, 'rumacfit/drafts');
-    const responsesRef = ref(database, 'rumacfit/emailResponses');
     
     Promise.all([
         new Promise(resolve => onValue(leadsRef, snap => resolve(snap.val()), { onlyOnce: true })),
-        new Promise(resolve => onValue(draftsRef, snap => resolve(snap.val()), { onlyOnce: true })),
-        new Promise(resolve => onValue(responsesRef, snap => resolve(snap.val()), { onlyOnce: true }))
-    ]).then(([leadsData, draftsData, responsesData]) => {
+        new Promise(resolve => onValue(draftsRef, snap => resolve(snap.val()), { onlyOnce: true }))
+    ]).then(([leadsData, draftsData]) => {
         const leads = leadsData ? Object.keys(leadsData).map(k => ({ id: k, ...leadsData[k] })) : [];
         const drafts = draftsData ? Object.keys(draftsData).map(k => ({ id: k, ...draftsData[k] })) : [];
-        const responses = responsesData ? Object.keys(responsesData).map(k => ({ id: k, ...responsesData[k] })) : [];
         
         let pageContent = '';
         switch (currentPage) {
-            case 'responses':
-                pageContent = EmailResponses(responses);
-                break;
             case 'profiles':
                 pageContent = ClientProfiles(leads, drafts);
                 break;
@@ -510,6 +506,9 @@ function render() {
                 break;
             case 'pipeline':
                 pageContent = Pipeline(leads);
+                break;
+            case 'tasks':
+                pageContent = Tasks(leads, drafts);
                 break;
             case 'metrics':
                 pageContent = Metrics(leads);
@@ -528,7 +527,6 @@ function render() {
 window.navigate = navigate;
 window.copyToClipboard = copyToClipboard;
 window.markAsSent = markAsSent;
-window.markResponseHandled = markResponseHandled;
 
 // Initial render
 render();
