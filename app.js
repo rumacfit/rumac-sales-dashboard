@@ -244,8 +244,71 @@ function Tasks(leads, drafts) {
 }
 
 // Metrics Page
+let metricsTimeframe = 'week'; // Default timeframe
+
 function Metrics(leads) {
     const now = new Date();
+    
+    // Calculate date ranges based on selected timeframe
+    let startDate, endDate, label, compareStartDate;
+    
+    if (metricsTimeframe === 'today') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        compareStartDate = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
+        label = 'Today';
+    } else if (metricsTimeframe === 'week') {
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - now.getDay());
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+        compareStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+        label = 'This Week';
+    } else if (metricsTimeframe === 'month') {
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        compareStartDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        label = 'This Month';
+    } else { // all
+        startDate = new Date(0);
+        endDate = new Date();
+        compareStartDate = null;
+        label = 'All Time';
+    }
+
+    // Filter leads by timeframe
+    const periodLeads = leads.filter(l => {
+        const date = new Date(l.dateAdded);
+        return date >= startDate && date < endDate;
+    });
+
+    // Compare period leads (for change %)
+    const comparePeriodLeads = compareStartDate ? leads.filter(l => {
+        const date = new Date(l.dateAdded);
+        return date >= compareStartDate && date < startDate;
+    }) : [];
+
+    const leadsChange = comparePeriodLeads.length > 0 
+        ? (((periodLeads.length - comparePeriodLeads.length) / comparePeriodLeads.length) * 100).toFixed(1) 
+        : 0;
+
+    // Revenue calculations
+    const periodRevenue = leads.filter(l => {
+        if (l.stage !== 'converted') return false;
+        const date = new Date(l.lastUpdated);
+        return date >= startDate && date < endDate;
+    }).length * 149;
+
+    const comparePeriodRevenue = compareStartDate ? leads.filter(l => {
+        if (l.stage !== 'converted') return false;
+        const date = new Date(l.lastUpdated);
+        return date >= compareStartDate && date < startDate;
+    }).length * 149 : 0;
+
+    // Overall conversion rate
+    const converted = periodLeads.filter(l => l.stage === 'converted').length;
+    const conversionRate = periodLeads.length > 0 ? ((converted / periodLeads.length) * 100).toFixed(1) : 0;
+
     const thisWeekStart = new Date(now);
     thisWeekStart.setDate(now.getDate() - now.getDay());
     thisWeekStart.setHours(0, 0, 0, 0);
@@ -264,15 +327,6 @@ function Metrics(leads) {
     const lastWeekLeads = getWeekLeads(lastWeekStart);
     const weekChange = lastWeekLeads > 0 ? (((thisWeekLeads - lastWeekLeads) / lastWeekLeads) * 100).toFixed(1) : 0;
 
-    const converted = leads.filter(l => l.stage === 'converted').length;
-    const conversionRate = leads.length > 0 ? ((converted / leads.length) * 100).toFixed(1) : 0;
-
-    const thisWeekRevenue = leads.filter(l => {
-        if (l.stage !== 'converted') return false;
-        const date = new Date(l.lastUpdated);
-        return date >= thisWeekStart;
-    }).length * 149;
-
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const thisMonthRevenue = leads.filter(l => {
         if (l.stage !== 'converted') return false;
@@ -289,29 +343,39 @@ function Metrics(leads) {
 
     return `
         <div>
-            <h2 class="text-2xl font-bold text-gray-800 mb-6">Metrics</h2>
+            <div class="flex justify-between items-center mb-6 flex-wrap gap-4">
+                <h2 class="text-2xl font-bold text-gray-800">Metrics</h2>
+                <div class="flex gap-2 flex-wrap">
+                    <button onclick="setMetricsTimeframe('today')" class="px-4 py-2 rounded ${metricsTimeframe === 'today' ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}">Today</button>
+                    <button onclick="setMetricsTimeframe('week')" class="px-4 py-2 rounded ${metricsTimeframe === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}">This Week</button>
+                    <button onclick="setMetricsTimeframe('month')" class="px-4 py-2 rounded ${metricsTimeframe === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}">This Month</button>
+                    <button onclick="setMetricsTimeframe('all')" class="px-4 py-2 rounded ${metricsTimeframe === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-200 hover:bg-gray-300'}">All Time</button>
+                </div>
+            </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div class="bg-white rounded-lg shadow p-6">
-                    <div class="text-sm text-gray-600 mb-2">Revenue This Week</div>
-                    <div class="text-3xl font-bold text-green-600">$${thisWeekRevenue}</div>
+                    <div class="text-sm text-gray-600 mb-2">Revenue ${label}</div>
+                    <div class="text-3xl font-bold text-green-600">$${periodRevenue}</div>
+                    ${comparePeriodRevenue > 0 ? `<div class="text-sm text-gray-500 mt-2">${periodRevenue >= comparePeriodRevenue ? '+' : ''}$${periodRevenue - comparePeriodRevenue} vs previous period</div>` : ''}
                 </div>
                 <div class="bg-white rounded-lg shadow p-6">
-                    <div class="text-sm text-gray-600 mb-2">Revenue This Month</div>
-                    <div class="text-3xl font-bold text-green-600">$${thisMonthRevenue}</div>
+                    <div class="text-sm text-gray-600 mb-2">Leads ${label}</div>
+                    <div class="text-3xl font-bold text-blue-600">${periodLeads.length}</div>
+                    ${comparePeriodLeads.length > 0 ? `<div class="text-sm text-gray-500 mt-2">${leadsChange > 0 ? '+' : ''}${leadsChange}% vs previous period</div>` : ''}
                 </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div class="bg-white rounded-lg shadow p-6">
-                    <div class="text-sm text-gray-600 mb-2">Leads This Week</div>
-                    <div class="text-3xl font-bold text-blue-600">${thisWeekLeads}</div>
-                    <div class="text-sm text-gray-500 mt-2">${weekChange > 0 ? '+' : ''}${weekChange}% vs last week</div>
+                    <div class="text-sm text-gray-600 mb-2">Conversion Rate ${label}</div>
+                    <div class="text-3xl font-bold text-purple-600">${conversionRate}%</div>
+                    <div class="text-sm text-gray-500 mt-2">${converted} / ${periodLeads.length} leads converted</div>
                 </div>
                 <div class="bg-white rounded-lg shadow p-6">
-                    <div class="text-sm text-gray-600 mb-2">Overall Conversion Rate</div>
-                    <div class="text-3xl font-bold text-purple-600">${conversionRate}%</div>
-                    <div class="text-sm text-gray-500 mt-2">${converted} / ${leads.length} leads converted</div>
+                    <div class="text-sm text-gray-600 mb-2">Avg Revenue Per Lead</div>
+                    <div class="text-3xl font-bold text-green-600">$${periodLeads.length > 0 ? (periodRevenue / periodLeads.length).toFixed(0) : 0}</div>
+                    <div class="text-sm text-gray-500 mt-2">Based on ${label.toLowerCase()}</div>
                 </div>
             </div>
 
@@ -374,6 +438,10 @@ onValue(ref(database, 'rumacfit/leads'), (snapshot) => {
 window.navigate = navigate;
 window.copyToClipboard = copyToClipboard;
 window.markAsSent = markAsSent;
+window.setMetricsTimeframe = (timeframe) => {
+    metricsTimeframe = timeframe;
+    render();
+};
 
 // Initial render
 render();
