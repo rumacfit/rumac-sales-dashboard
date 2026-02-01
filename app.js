@@ -5,7 +5,7 @@ import { getDatabase, ref, onValue, update } from 'https://www.gstatic.com/fireb
 const firebaseConfig = {
     apiKey: "AIzaSyBvBxqXWJ8q7c8LZ8XJ7yN3xZ2nQ4Z8Q9M",
     authDomain: "planning-hub-cd575.firebaseapp.com",
-    databaseURL: "https://planning-hub-cd575-default-rtdb.firebaseio.com",
+    databaseURL: "https://planning-hub-cd575-default-rtdb.asia-southeast1.firebasedatabase.app",
     projectId: "planning-hub-cd575",
     storageBucket: "planning-hub-cd575.firebasestorage.app",
     messagingSenderId: "100641708015089217191"
